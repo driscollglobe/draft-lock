@@ -500,6 +500,17 @@ body.land.fs .hud-m{grid-template-columns:60px 110px}
 #coach{top:auto !important;bottom:96px}
 body.fs #coach{top:calc(var(--fsbar,48px) + 116px) !important;bottom:auto}
 
+/* Car portraits: splash hero and the car picker */
+.msc-lockup .hero-car{width:min(100%,300px);height:auto;display:block;margin:0 auto -6px;filter:drop-shadow(0 10px 14px rgba(0,0,0,.45))}
+.liveries{grid-template-columns:repeat(3,1fr) !important;gap:8px !important}
+@media (max-width:420px){ .liveries{grid-template-columns:repeat(2,1fr) !important} }
+.liveries .lv{height:auto !important;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:6px 6px 7px !important;background:#1b1c21 !important;border:1px solid #2c2d33 !important;border-radius:8px !important;text-shadow:none !important;color:#F4F2ED !important;text-align:left}
+.liveries .lv img{width:100%;height:auto;display:block}
+.liveries .lv b{font:700 15px/1 var(--font-display);letter-spacing:.5px}
+.liveries .lv small{font:700 9.5px/1.2 var(--font-mono);color:#9C9A96;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.liveries .lv.on{border-color:var(--signal-amber) !important;box-shadow:0 0 0 2px rgba(245,197,24,.35) !important}
+.liveries .lv:disabled{opacity:.3}
+
 </style>
 </head>
 <body data-screen="start">
@@ -548,11 +559,7 @@ body.fs #coach{top:calc(var(--fsbar,48px) + 116px) !important;bottom:auto}
     <div class="overlay" id="startOv"><div class="inner">
       <div class="msc-splash">
         <div class="msc-lockup">
-          <div class="lk-icon"><svg viewBox="0 0 104 104" aria-hidden="true"><g stroke="#F5C518" stroke-width="4" stroke-linecap="round"><path d="M6 40h14M2 52h18M8 64h12"/></g>
-<g transform="translate(60 52)"><rect x="-26" y="-20" width="11" height="5" rx="1.5" fill="#0e0e10"/><rect x="-26" y="15" width="11" height="5" rx="1.5" fill="#0e0e10"/><rect x="15" y="-20" width="11" height="5" rx="1.5" fill="#0e0e10"/><rect x="15" y="15" width="11" height="5" rx="1.5" fill="#0e0e10"/>
-<rect x="-36" y="-17" width="72" height="34" rx="9" fill="#E4322A"/><rect x="-37" y="-17" width="4" height="34" rx="1" fill="#14151A"/>
-<path d="M-4 -15 L10 -13 L10 13 L-4 15 Z" fill="#1d2730"/><path d="M-22 -14 L-12 -13 L-12 13 L-22 14 Z" fill="#1d2730"/>
-<rect x="-12" y="-12" width="8" height="24" fill="#F4F2ED"/><text x="-8" y="4" font-family="Oswald,sans-serif" font-weight="700" font-size="11" text-anchor="middle" fill="#14151A" transform="rotate(90 -8 0)">7</text></g></svg></div>
+          <img class="hero-car" id="heroCar" alt="" width="560" height="220">
           <div class="lk-brand"><svg viewBox="0 0 145 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="#FFF000" d="M47.79,4.07h-3.08V.11h-4.29v18.72h4.29v-10.46h3.08v-4.29Z"></path>
 <path fill="#FFF000" d="M144.36,4.07h-3.19V0h-4.18v18.83h4.18v-10.46h3.19v-4.29Z"></path>
 <path fill="#FFF000" d="M98.55,19.05c4.18,0,7.6-3.41,7.6-7.6s-3.41-7.6-7.6-7.6-7.6,3.41-7.6,7.6v12.88h4.29v-6.06l.33.11c.88.44,1.98.66,2.97.66ZM95.25,11.34c0-1.76,1.54-3.3,3.3-3.3,1.87,0,3.3,1.54,3.3,3.3s-1.54,3.3-3.3,3.3c-1.76.11-3.3-1.32-3.3-3.3Z"></path>
@@ -2392,7 +2399,7 @@ function sharedMats(){
 }
 
 /* Build one car. L = livery row, driver = name shown above the doors */
-function buildCarMesh(L,driver){
+function buildCarMeshClassic(L,driver){
   const G=carGeometry(), M=sharedMats(), lowEnd=LOW_END;
   const Ld=Object.assign({},L,{driver:driver||L.driver});
   const A=lowEnd?512:1024;
@@ -2594,6 +2601,186 @@ function worldTick(now){
     else { g.fillStyle=TRACK_BOARD.bg; g.fillRect(0,0,w,h); drawWordmark(g,w/2,h/2,64,TRACK_BOARD.fg); }
     WORLD.video.t.needsUpdate=true; }
 }
+
+/* ================= Stock car, detailed model =================
+   A lofted body (smooth shoulder line, rounded nose and tail, real wheel arches), a
+   greenhouse with tinted glass and the tumblehome built in, five-spoke wheels with discs and
+   calipers, light lenses, mirrors. Same units and livery atlas as the classic model:
+   length 1.0, x forward, y up, z to the car's right. Low-end phones keep simpler wheels. */
+const HD={ARCH:.074, X0:.5};
+function pl(pts,x){ // piecewise linear through [x,y] points sorted by x descending, smoothed
+  if(x>=pts[0][0]) return pts[0][1]; for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i]; if(x>=b[0]){ const t=(a[0]-x)/(a[0]-b[0]); return lerp(a[1],b[1],smooth(t)); } } return pts[pts.length-1][1]; }
+const HD_TOP=[[.5,.105],[.485,.128],[.46,.145],[.42,.156],[.34,.165],[.2,.169],[.08,.172],[-.1,.173],[-.38,.174],[-.46,.177],[-.49,.172],[-.5,.15]];
+const hdTop=x=>pl(HD_TOP,x);
+function hdBot(x){ let y=x>.44?lerp(.045,.062,smooth((x-.44)/.06)):x<-.47?lerp(.045,.055,smooth((-.47-x)/.03)):.045;
+  for(const c of [AX,-AX]){ const d=Math.abs(x-c); if(d<HD.ARCH){ y=Math.max(y,WR+Math.sqrt(HD.ARCH*HD.ARCH-d*d)*.98); } } return Math.min(y,hdTop(x)-.012); }
+function hdW(x){ let w=CAR.W/2; if(x>.38) w-= .034*smooth((x-.38)/.12); if(x<-.43) w-=.012*smooth((-.43-x)/.07); return w; }
+function loft(stations,section,opts){ // stations: x values; section(x) -> [[z,y]...] from the right side (z>=0) to the center line
+  const S=stations.length, M=section(stations[0]).length, full=[];
+  for(const x of stations){ const sec=section(x), ring=[]; for(let j=0;j<M;j++) ring.push([x,sec[j][1],sec[j][0]]); for(let j=M-2;j>=0;j--) ring.push([x,sec[j][1],-sec[j][0]]); full.push(ring); }
+  const R=full[0].length, pos=[], tag=[];
+  for(let i=0;i<S-1;i++) for(let j=0;j<R-1;j++){ const a=full[i][j], b=full[i+1][j], c=full[i+1][j+1], d=full[i][j+1];
+    const t=opts&&opts.tag?opts.tag(i,j<M-1?j:R-2-j):0;
+    if(stations[0]>stations[1]) pos.push(a,d,c, a,c,b); else pos.push(a,b,c, a,c,d); tag.push(t,t); }
+  return {full,pos,tag,M,R};
+}
+function geoFrom(tris){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(tris.flat(2),3)); g.computeVertexNormals(); return g; }
+function capFan(ring,flip){ const c=[0,0,0]; for(const p of ring){ c[0]+=p[0]; c[1]+=p[1]; c[2]+=p[2]; } c.forEach((v,i)=>c[i]=v/ring.length); const t=[];
+  for(let j=0;j<ring.length-1;j++) flip?t.push(c,ring[j+1],ring[j]):t.push(c,ring[j],ring[j+1]); return t; }
+let CARGEO_HD=null;
+function carGeometryHD(){
+  if(CARGEO_HD) return CARGEO_HD;
+  const base=carGeometry();
+  // body: 84 stations from nose to tail
+  const st=[]; for(let k=0;k<=84;k++) st.push(.5-k/84);
+  const sec=x=>{ const top=hdTop(x), bot=hdBot(x), w=hdW(x), h=top-bot;
+    return [[w*.955,bot],[w*.995,bot+h*.25],[w*1.005,bot+h*.5],[w*.995,top-Math.min(.03,h*.35)],[w*.96,top-.009],[w*.88,top-.0015],[w*.6,top+.004],[w*.3,top+.006],[0,top+.0065]]; };
+  const L=loft(st,sec), tris=[];
+  for(let i=0;i<L.pos.length;i+=3) tris.push([L.pos[i],L.pos[i+1],L.pos[i+2]]);
+  let body=geoFrom(tris.concat(chunk(capFan(L.full[0],false))).concat(chunk(capFan(L.full[L.full.length-1],true))));
+  body=assignUV(body); body.computeVertexNormals();
+  // greenhouse: glass all round, the flat part of the roof is painted (roof number)
+  const g0=.1, g3=-.43, gst=[]; for(let k=0;k<=36;k++) gst.push(g0+(g3-g0)*k/36);
+  const roofY=x=>x>-.02?lerp(hdTop(x)-.002,CAR.ROOF+.002,Math.sin(Math.PI/2*clamp((g0-x)/(g0+.02),0,1))):x>-.19?CAR.ROOF+.002:lerp(CAR.ROOF+.002,hdTop(x)-.002,Math.pow(clamp((-.19-x)/(-.19-g3),0,1),.85));
+  const gsec=x=>{ const yb=hdTop(x)-.003, yt=roofY(x), zb=hdW(x)*.87, z1=CAR.W/2*.69, h=yt-yb;
+    return [[zb,yb],[lerp(zb,z1,.35),yb+h*.4],[z1+.006,yt-Math.min(.012,h*.4)],[z1*.93,yt],[z1*.5,yt+.004],[0,yt+.005]]; };
+  const G=loft(gst,gsec), glass=[], roof=[];
+  for(let i=0,t=0;i<G.pos.length;i+=6,t+=2){ const s=Math.floor((i/6)/(G.R-1)), j=(i/6)%(G.R-1), jj=j<G.M-1?j:G.R-2-j, x=gst[s];
+    const isRoof=jj>=3&&x<-.03&&x>-.185; const dst=isRoof?roof:glass; dst.push([G.pos[i],G.pos[i+1],G.pos[i+2]],[G.pos[i+3],G.pos[i+4],G.pos[i+5]]); }
+  let roofG=assignUV(geoFrom(roof),'top'); roofG.computeVertexNormals();
+  const glassG=geoFrom(glass);
+  // inner wheel wells (dark), so the arches read as openings
+  const well=[]; for(const c of [AX,-AX]){ const n=14, zw=CAR.W/2-.006;
+    for(let k=0;k<n;k++){ const a0=Math.PI*k/n, a1=Math.PI*(k+1)/n, p=(a,z)=>[c+Math.cos(a)*HD.ARCH*.97,WR+Math.sin(a)*HD.ARCH*.97,z];
+      well.push([p(a0,-zw),p(a1,-zw),p(a1,zw)],[p(a0,-zw),p(a1,zw),p(a0,zw)]); } }
+  const wellG=geoFrom(well);
+  // wheels: rounded tire (lathe), five-spoke rim, brake disc
+  const tp=[], tw=CAR.TIRE_W/2; for(const [r,y] of [[WR*.72,-tw],[WR*.93,-tw],[WR*.99,-tw*.85],[WR,-tw*.55],[WR,tw*.55],[WR*.99,tw*.85],[WR*.93,tw],[WR*.72,tw]]) tp.push(new THREE.Vector2(r,y));
+  const tire=new THREE.LatheGeometry(tp,LOW_END?14:24); tire.rotateX(Math.PI/2);
+  const rs=new THREE.Shape(); rs.absarc(0,0,WR*.72,0,Math.PI*2,false);
+  for(let k=0;k<10;k++){ const a=k*Math.PI*2/10+Math.PI/10, h=new THREE.Path(), r0=WR*.26, r1=WR*.64, da=.2;
+    h.moveTo(Math.cos(a-da*.55)*r0,Math.sin(a-da*.55)*r0); h.lineTo(Math.cos(a-da)*r1,Math.sin(a-da)*r1);
+    h.absarc(0,0,r1,a-da,a+da,false); h.lineTo(Math.cos(a+da*.55)*r0,Math.sin(a+da*.55)*r0); h.absarc(0,0,r0,a+da*.55,a-da*.55,true); rs.holes.push(h); }
+  const rim=new THREE.ExtrudeGeometry(rs,{depth:.006,bevelEnabled:true,bevelThickness:.003,bevelSize:.002,bevelSegments:1,curveSegments:LOW_END?8:16});
+  const disc=new THREE.CylinderGeometry(WR*.56,WR*.56,.006,18).rotateX(Math.PI/2);
+  const cap=new THREE.CylinderGeometry(WR*.1,WR*.13,.014,6).rotateX(Math.PI/2);   // single center lug nut (hex)
+  const side=new THREE.RingGeometry(WR*.73,WR*.985,40,1);
+  const lens=new THREE.SphereGeometry(.5,12,8);
+  CARGEO_HD=Object.assign({},base,{body,roofG,glassG,wellG,tire,rim,disc,cap,lens,side,exh:new THREE.CylinderGeometry(.011,.011,.05,10).rotateX(Math.PI/2)});
+  return CARGEO_HD;
+}
+function chunk(flat){ const t=[]; for(let i=0;i<flat.length;i+=3) t.push([flat[i],flat[i+1],flat[i+2]]); return t; }
+const HDM={};
+function hdMats(){
+  if(HDM.glass) return HDM;
+  HDM.glass=new THREE.MeshPhysicalMaterial({color:lin(0x10161c),roughness:.06,metalness:.3,clearcoat:1,clearcoatRoughness:.03,envMapIntensity:1.2});
+  HDM.well=new THREE.MeshStandardMaterial({color:lin(0x0b0b0c),roughness:1,side:THREE.DoubleSide});
+  HDM.tire=new THREE.MeshStandardMaterial({color:lin(0x151517),roughness:.85});
+  HDM.disc=new THREE.MeshStandardMaterial({color:lin(0x55585e),roughness:.45,metalness:.7});
+  HDM.caliper=new THREE.MeshStandardMaterial({color:lin(0xc8102e),roughness:.4});
+  HDM.head=new THREE.MeshPhysicalMaterial({color:lin(0xf3efe2),emissive:lin(0xfff6d8),emissiveIntensity:.35,roughness:.05,metalness:.2,clearcoat:1});
+  HDM.tail=new THREE.MeshPhysicalMaterial({color:lin(0xb3121b),emissive:lin(0xff2a1a),emissiveIntensity:.55,roughness:.1,clearcoat:1});
+  HDM.chrome=new THREE.MeshStandardMaterial({color:lin(0xc9ccd2),roughness:.18,metalness:1});
+  HDM.lug=new THREE.MeshStandardMaterial({color:lin(0xd23a1a),roughness:.3,metalness:.6});
+  HDM.side=new THREE.MeshStandardMaterial({map:sidewallTex(),transparent:true,roughness:.8,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1});
+  HDM.net=new THREE.MeshBasicMaterial({map:netTex(),transparent:true,depthWrite:false,side:THREE.DoubleSide});
+  return HDM;
+}
+function buildCarMesh(L,driver){
+  const G=carGeometryHD(), M=sharedMats(), H=hdMats(), lowEnd=LOW_END;
+  const Ld=Object.assign({},L,{driver:driver||L.driver});
+  const A=lowEnd?512:1024;
+  const atlas=canvasTex(A,A,c=>{ paintAtlas(c,Ld); panelLines(c,A); });
+  const paint=lowEnd?new THREE.MeshStandardMaterial({map:atlas,roughness:.35,metalness:.05})
+    :new THREE.MeshPhysicalMaterial({map:atlas,roughness:.3,metalness:.02,clearcoat:1,clearcoatRoughness:.05,envMapIntensity:.95});
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const add=(geo,mat,x,y,z,sx,sy,sz,par)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); if(sx) m.scale.set(sx,sy,sz); m.castShadow=!lowEnd; (par||body).add(m); return m; };
+  add(G.body,paint,0,0,0); add(G.roofG,paint,0,0,0); add(G.glassG,H.glass,0,0,0); add(G.wellG,H.well,0,0,0).castShadow=false;
+  add(G.box,M.black,.475,.036,0,.03,.008,CAR.W-.08);                                         // splitter
+  const sp=add(G.box,M.black,-.493,.194,0,.005,.042,CAR.W-.04); sp.rotation.z=.3;              // spoiler blade on the deck lip
+  [-1,1].forEach(s=>add(G.box,M.black,-.484,.19,s*(CAR.W/2-.022),.026,.034,.004));                // spoiler end plates
+  [-1,1].forEach(sd=>add(G.box,M.black,0,.04,sd*(CAR.W/2-.004),.36,.018,.012));                // side skirts
+  const body3=lin(L.base), mirMat=new THREE.MeshStandardMaterial({color:body3,roughness:.3,metalness:.05});
+  [-1,1].forEach(sd=>{ add(G.box,M.black,.07,.181,sd*(CAR.W/2-.02),.006,.008,.016); add(G.box,mirMat,.068,.188,sd*(CAR.W/2-.008),.014,.013,.022); });   // mirrors
+  // light lenses: headlights wrap the nose corners, tail lights at the rear corners
+  // side exhausts ahead of the rear wheels, windshield banner, window net (driver side)
+  [-1,1].forEach(sd=>add(G.exh,M.black,-.17,.04,sd*(CAR.W/2+.006)));
+  if(!wsCache['b'+L.num]) wsCache['b'+L.num]=new THREE.MeshBasicMaterial({map:bannerTex(L),transparent:true});
+  { const p=new THREE.Vector3(.004,.243,0), n=new THREE.Vector3(.6,.8,0); const b=add(G.plane,wsCache['b'+L.num],p.x+n.x*.004,p.y+n.y*.004,0,.23,.032,1); b.lookAt(b.position.clone().add(n)); b.castShadow=false; }
+  { const n=new THREE.Vector3(0,.37,-.93), w=add(G.plane,H.net,-.07,.214,-.161,.15,.055,1); w.lookAt(w.position.clone().add(n)); w.castShadow=false; }
+  const np=add(G.plane,M.nose,.5035,.078,0,CAR.W-.13,.05,1); np.rotation.y=Math.PI/2; np.castShadow=false;
+  if(!tailCache[L.num]) tailCache[L.num]=new THREE.MeshBasicMaterial({map:tailTex(L)});
+  const tp=add(G.plane,tailCache[L.num],-.5025,.098,0,CAR.W-.03,.1,1); tp.rotation.y=-Math.PI/2; tp.castShadow=false;
+  // wheels: front pair can steer
+  const rimMat=new THREE.MeshStandardMaterial({color:lin(L.rim!=null?L.rim:0x1a1b1f),roughness:.35,metalness:.6,envMapIntensity:1});
+  const wheels=[];
+  [[AX,true],[-AX,false]].forEach(([x,front])=>[-1,1].forEach(sd=>{
+    const pivot=new THREE.Group(); pivot.position.set(x,WR,sd*(CAR.W/2-CAR.TIRE_W/2-.006)); g.add(pivot);
+    const spin=new THREE.Group(); pivot.add(spin);
+    const t=new THREE.Mesh(G.tire,H.tire); t.castShadow=!lowEnd; spin.add(t);
+    const r=new THREE.Mesh(G.rim,rimMat); r.position.z=sd*(CAR.TIRE_W/2-.012); if(sd<0) r.rotation.y=Math.PI; spin.add(r);
+    const d=new THREE.Mesh(G.disc,H.disc); d.position.z=sd*(CAR.TIRE_W/2-.02); spin.add(d);
+    const cp=new THREE.Mesh(G.cap,H.lug); cp.position.z=sd*(CAR.TIRE_W/2-.004); spin.add(cp);
+    const sw=new THREE.Mesh(G.side,H.side); sw.position.z=sd*(CAR.TIRE_W/2+.0005); if(sd<0) sw.rotation.y=Math.PI; spin.add(sw);
+    const cal=new THREE.Mesh(G.box,H.caliper); cal.scale.set(.026,.03,.012); cal.position.set(0,WR*.36,sd*(CAR.TIRE_W/2-.024)); pivot.add(cal);   // the caliper does not spin
+    wheels.push({pivot,spin,front}); }));
+  if(!SHADOWS){ const b=add(G.plane,M.blob,0,.004,0,1.25,.62,1,g); b.rotation.x=-Math.PI/2; b.castShadow=false; b.renderOrder=-1; }
+  g.scale.setScalar(CAR_LEN);
+  g.userData={body,wheels,atlas};
+  return g;
+}
+/* Details over the livery (both sides): front fender vent, fuel filler (left rear),
+   and a light character line along the flank */
+function panelLines(c,A){
+  const S=A/1024;
+  for(const side of ['left','right']){ const sg=side==='left'?-1:1, row=side==='left'?ATLAS.left:ATLAS.right;
+    c.save(); c.setTransform(S,0,0,S,0,0); c.beginPath(); c.rect(0,row,1024,ATLAS.sideH*1024); c.clip();
+    c.setTransform(S*sg*1024,0,0,-S*1024,S*512,S*(row+ATLAS.sideH*1024));
+    c.lineWidth=.0016; c.strokeStyle='rgba(0,0,0,.45)';
+    // race cars have no working doors: no seams, no handles. Hood and deck pins instead are on the top view.
+    c.fillStyle='rgba(10,10,12,.7)'; for(let k=0;k<3;k++) c.fillRect(.205+k*.0,.118+k*.009,.05,.004);                      // fender vent
+    c.strokeStyle='rgba(255,255,255,.22)'; c.lineWidth=.002; c.beginPath(); c.moveTo(.46,.128); c.bezierCurveTo(.2,.134,-.2,.134,-.48,.138); c.stroke();   // character line
+    c.strokeStyle='rgba(0,0,0,.18)'; c.beginPath(); c.moveTo(.46,.124); c.bezierCurveTo(.2,.130,-.2,.130,-.48,.134); c.stroke();
+    if(side==='left'){ c.strokeStyle='rgba(0,0,0,.5)'; c.lineWidth=.0016; c.beginPath(); c.arc(-.36,.14,.012,0,7); c.stroke(); }   // fuel filler
+    c.restore(); }
+}
+/* ---------- Side-view portraits of the liveries (menus) ----------
+   Rendered once per livery from the same 3D model, front to the left. */
+const Portrait=(function(){
+  let r=null, scene=null, cam=null, cache={};
+  function setup(){
+    const cv=document.createElement('canvas'); r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true,preserveDrawingBuffer:true});
+    r.outputEncoding=THREE.sRGBEncoding; r.setPixelRatio(2); r.setSize(560,220,false);
+    scene=new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff,0x6a6a70,.75)); const d=new THREE.DirectionalLight(0xffffff,.8); d.position.set(.4,2,-1.2); scene.add(d);
+    try{ const ec=document.createElement('canvas'); ec.width=256; ec.height=128; const x=ec.getContext('2d'); const gr=x.createLinearGradient(0,0,0,128);
+      gr.addColorStop(0,'#cfd6dd'); gr.addColorStop(.45,'#ffffff'); gr.addColorStop(.52,'#7b7f84'); gr.addColorStop(1,'#3a3c3f'); x.fillStyle=gr; x.fillRect(0,0,256,128);
+      x.fillStyle='rgba(255,255,255,.9)'; x.fillRect(40,20,60,14); x.fillRect(150,26,70,10);
+      const t=new THREE.CanvasTexture(ec); t.mapping=THREE.EquirectangularReflectionMapping; t.encoding=THREE.sRGBEncoding;
+      const pm=new THREE.PMREMGenerator(r); scene.environment=pm.fromEquirectangular(t).texture; pm.dispose(); }catch(e){}
+    cam=new THREE.OrthographicCamera(-.56,.56,.22,-.22,.1,10); cam.position.set(0,.13,-3); cam.lookAt(0,.13,0);
+  }
+  function get(L){
+    if(cache[L.num]) return cache[L.num];
+    try{ if(!r) setup();
+      const m=buildCarMesh(L,L.driver); m.scale.setScalar(1); m.rotation.y=0; m.userData.wheels.forEach(w=>{ if(w.front) w.pivot.rotation.y=.12; });
+      const sh=new THREE.Mesh(new THREE.PlaneGeometry(1.2,.32),new THREE.MeshBasicMaterial({map:blobTex,transparent:true,depthWrite:false})); sh.rotation.x=-Math.PI/2; sh.position.y=.001;
+      scene.add(m,sh); r.render(scene,cam); const url=r.domElement.toDataURL('image/png'); scene.remove(m,sh);
+      cache[L.num]=url; return url; }catch(e){ return ''; }
+  }
+  return {get};
+})();
+
+/* Tire sidewall: the brand in yellow letters, twice around (invented brand, see TIRE_BRAND) */
+function sidewallTex(){ return canvasTex(256,256,(c,w)=>{ c.clearRect(0,0,w,w); const r=w/2; c.translate(r,r);
+  c.fillStyle='#e9c21a'; c.font=font(FD,22); c.textAlign='center'; c.textBaseline='middle';
+  for(const a0 of [0,Math.PI]){ const s=TIRE_BRAND; for(let k=0;k<s.length;k++){ const a=a0-.62+k*.135; c.save(); c.rotate(a); c.translate(0,-r*.86); c.fillText(s[k],0,0); c.restore(); } } }); }
+/* Windshield banner: the sponsor across the top of the glass */
+function bannerTex(L){ return canvasTex(512,72,(c,w,h)=>{ c.clearRect(0,0,w,h); c.fillStyle=hex(L.bannerBg!=null?L.bannerBg:L.a1); c.fillRect(0,0,w,h);
+  c.save(); c.translate(w/2,h/2); fitText(c,L.sponsor,w*.82,h*.78,hex(L.bannerFg!=null?L.bannerFg:(L.a1==='#ffffff'?'#111214':'#ffffff'))); c.restore(); }); }
+/* Window net on the driver side */
+function netTex(){ return canvasTex(128,64,(c,w,h)=>{ c.clearRect(0,0,w,h); c.strokeStyle='rgba(8,8,10,.9)'; c.lineWidth=3;
+  c.strokeRect(1.5,1.5,w-3,h-3); c.lineWidth=1.6; for(let x=10;x<w;x+=12){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,h); c.stroke(); } for(let y=10;y<h;y+=12){ c.beginPath(); c.moveTo(0,y); c.lineTo(w,y); c.stroke(); } }); }
 
 /* ================= Display: station label, HUD, toast ================= */
 let FS=false, LAND=false, TAB=false;
@@ -3137,11 +3324,13 @@ function toMenuLocal(){ hideAllOv(); setFS(false); paused=false; state='menu'; c
 function toMenu(){ if(VGP.S){ VGP.S.result=null; sv(); } MSC.go('start'); }
 
 /* Livery picker (the player's car). The chosen livery replaces that AI driver in the field. */
-function liveryChip(L,on,dis){ return `<button type="button" class="lv${on?' on':''}" ${dis?'disabled':''} title="#${esc(L.num)} ${esc(L.sponsor)}" aria-label="Car ${esc(L.num)}" style="--c:${L.base};--a:${L.a1};--t:${L.numColor||'#fff'}"><span>${esc(L.num)}</span></button>`; }
+function liveryChip(L,on,dis){ return `<button type="button" class="lv${on?' on':''}" ${dis?'disabled':''} title="#${esc(L.num)} ${esc(L.sponsor)}" aria-label="Car ${esc(L.num)}, ${esc(L.driver)}"><img alt="" src="${Portrait.get(L)}"><b>#${esc(L.num)}</b><small>${esc(L.sponsor)}</small></button>`; }
+function updHero(){ const h=$('heroCar'); if(h){ const u=Portrait.get(LIVERIES[playerLivery]); if(u) h.src=u; h.hidden=!u; } }
 function renderLiveries(){ const el=$('liveries');
   el.innerHTML=LIVERIES.map((L,i)=>liveryChip(L,i===playerLivery)).join('');
-  [...el.children].forEach((b,i)=>b.onclick=()=>{ playerLivery=i; syncMe(); try{ localStorage.setItem('dl_livery',i); }catch(e){} renderLiveries(); }); }
-renderLiveries();
+  [...el.children].forEach((b,i)=>b.onclick=()=>{ playerLivery=i; syncMe(); try{ localStorage.setItem('dl_livery',i); }catch(e){} renderLiveries(); updHero(); }); }
+let _livDone=false; function ensureLiveries(){ if(_livDone) return; _livDone=true; renderLiveries(); }
+updHero();
 
 /* Difficulty, steer assist, touch steering */
 let diffIdx=(()=>{ try{ const v=localStorage.getItem('dl_difficulty3'); return v!==null&&+v>=0&&+v<DIFF.length?+v:0; }catch(e){ return 0; } })();
@@ -3162,7 +3351,7 @@ function updSteerSeg(){ $('steerSeg').querySelectorAll('button').forEach(b=>b.cl
 $('steerSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ btnSteer=+b.dataset.v===0; try{ localStorage.setItem('dl_steer',btnSteer?'1':'0'); }catch(e){} updSteerSeg(); ctlKey=''; });
 updSteerSeg();
 function updCupMeta(){ $('cupMeta').textContent=`${NR} races · ${FIELD} cars · steer assist ${assistOn()?'on':'off'}`; }
-$('setBtn').onclick=()=>{ const b=$('settingsBox'); b.hidden=!b.hidden; $('setBtn').textContent=b.hidden?'Settings':'Hide settings'; fitStage(); };
+$('setBtn').onclick=()=>{ const b=$('settingsBox'); if(b.hidden) ensureLiveries(); b.hidden=!b.hidden; $('setBtn').textContent=b.hidden?'Settings':'Hide settings'; fitStage(); };
 { const nm=MSC.local.get('name',''); if(nm) $('nameIn').value=nm;
   $('nameIn').addEventListener('input',()=>{ clearNameError(); MSC.local.set('name',$('nameIn').value.trim().slice(0,18)); }); }
 
@@ -3526,7 +3715,7 @@ if(DEBUG){
       setupRace(o.track||0); return this.summary(); },
     step(sec){ const n=Math.round(sec/DT); for(let i=0;i<n;i++){ sim(DT); if(state==='between') break; } return this.summary(); },
     run(maxSec){ let t=0; while(state!=='between'&&t<maxSec){ this.step(1); t+=1; } return this.summary(); },
-    hold(v){ DL_HOLD=v; }, air(c){ return airVmax(c); }, sound(){ return {ready:Sound.ready, loaded:Sound.loaded}; },
+    hold(v){ DL_HOLD=v; }, air(c){ return airVmax(c); }, sound(){ return {ready:Sound.ready, loaded:Sound.loaded}; }, portrait(i){ return Portrait.get(LIVERIES[i]); },
     input(o){ Object.assign(input,o); },
     cam(m){ View.camMode=m; },
     render(){ this._now=(this._now||performance.now())+1000/60; draw(this._now); updateHud(true); raceHud(1/60); },
