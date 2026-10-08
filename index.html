@@ -2304,8 +2304,6 @@ function paintAtlas(c,L){
   c.fillStyle='#0b0b0d';for(const zs of [-1,1])for(let k=0;k<7;k++)c.fillRect(0.11+k*0.014,zs>0?0.06:-0.13,0.007,0.07);
   // hood sponsor, reads from the front of the car
   c.save();c.translate(0.31,0);c.rotate(-Math.PI/2);fitText(c,L.sponsor,0.3,0.075,hex(L.sponsorColor!=null?L.sponsorColor:0xffffff),FD,L.sponsorBg!=null?hex(L.sponsorBg):null);c.restore();
-  // painted headlights on the nose
-  c.fillStyle='#f3efd8';for(const zs of [-1,1]){c.beginPath();c.moveTo(0.47,zs*0.12);c.lineTo(0.49,zs*0.12);c.lineTo(0.485,zs*0.185);c.lineTo(0.455,zs*0.185);c.closePath();c.fill();}
   // roof: number read from the left side, roof flaps at the back
   c.fillStyle='#0b0b0d';c.fillRect(GH.x2-0.01,-0.152,(GH.x1-GH.x2)+0.02,0.304);
   c.fillStyle=hex(L.roof!=null?L.roof:L.base);c.fillRect(GH.x2,-0.142,GH.x1-GH.x2,0.284);
@@ -2607,64 +2605,80 @@ function worldTick(now){
    greenhouse with tinted glass and the tumblehome built in, five-spoke wheels with discs and
    calipers, light lenses, mirrors. Same units and livery atlas as the classic model:
    length 1.0, x forward, y up, z to the car's right. Low-end phones keep simpler wheels. */
-const HD={ARCH:.074, X0:.5};
-function pl(pts,x){ // piecewise linear through [x,y] points sorted by x descending, smoothed
+const HD={ARCH:.082};
+function pl(pts,x){ // smooth piecewise curve through [x,y] points sorted by x descending
   if(x>=pts[0][0]) return pts[0][1]; for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i]; if(x>=b[0]){ const t=(a[0]-x)/(a[0]-b[0]); return lerp(a[1],b[1],smooth(t)); } } return pts[pts.length-1][1]; }
-const HD_TOP=[[.5,.105],[.485,.128],[.46,.145],[.42,.156],[.34,.165],[.2,.169],[.08,.172],[-.1,.173],[-.38,.174],[-.46,.177],[-.49,.172],[-.5,.15]];
+/* Next Gen proportions: blunt tall nose, long low hood, fender peaks, high flat tail */
+const HD_TOP=[[.5,.118],[.48,.136],[.44,.151],[.36,.161],[.2,.165],[.08,.169],[-.1,.172],[-.38,.177],[-.45,.186],[-.5,.186]];
 const hdTop=x=>pl(HD_TOP,x);
-function hdBot(x){ let y=x>.44?lerp(.045,.062,smooth((x-.44)/.06)):x<-.47?lerp(.045,.055,smooth((-.47-x)/.03)):.045;
-  for(const c of [AX,-AX]){ const d=Math.abs(x-c); if(d<HD.ARCH){ y=Math.max(y,WR+Math.sqrt(HD.ARCH*HD.ARCH-d*d)*.98); } } return Math.min(y,hdTop(x)-.012); }
-function hdW(x){ let w=CAR.W/2; if(x>.38) w-= .034*smooth((x-.38)/.12); if(x<-.43) w-=.012*smooth((-.43-x)/.07); return w; }
-function loft(stations,section,opts){ // stations: x values; section(x) -> [[z,y]...] from the right side (z>=0) to the center line
-  const S=stations.length, M=section(stations[0]).length, full=[];
-  for(const x of stations){ const sec=section(x), ring=[]; for(let j=0;j<M;j++) ring.push([x,sec[j][1],sec[j][0]]); for(let j=M-2;j>=0;j--) ring.push([x,sec[j][1],-sec[j][0]]); full.push(ring); }
-  const R=full[0].length, pos=[], tag=[];
-  for(let i=0;i<S-1;i++) for(let j=0;j<R-1;j++){ const a=full[i][j], b=full[i+1][j], c=full[i+1][j+1], d=full[i][j+1];
-    const t=opts&&opts.tag?opts.tag(i,j<M-1?j:R-2-j):0;
-    if(stations[0]>stations[1]) pos.push(a,d,c, a,c,b); else pos.push(a,b,c, a,c,d); tag.push(t,t); }
-  return {full,pos,tag,M,R};
+function hdBot(x){ let y=x>.47?.045:x<-.46?lerp(.04,.058,smooth((-.46-x)/.04)):.038;
+  for(const c of [AX,-AX]){ const d=Math.abs(x-c); if(d<HD.ARCH) y=Math.max(y,WR+Math.sqrt(HD.ARCH*HD.ARCH-d*d)); } return Math.min(y,hdTop(x)-.01); }
+function hdW(x){ let w=.203; if(x>.42) w-=.032*smooth((x-.42)/.08); if(x<-.47) w-=.008*smooth((-.47-x)/.03); return w; }
+function hdBulge(x){ let b=0; for(const c of [AX,-AX]){ const d=Math.abs(x-c); if(d<.15) b=Math.max(b,.013*Math.cos(Math.PI/2*d/.15)); } return b; }
+function hdValley(x){ return x>.08&&x<.47?.011*smooth(clamp((.47-x)/.1,0,1))*smooth(clamp((x-.08)/.06,0,1)):0; }
+/* Section of the body at station x, from the rocker up to the center line (right side, z>=0).
+   Index 3 is the character line: the lower and upper body are smoothed separately so the crease stays sharp. */
+function hdSection(x){ const top=hdTop(x), bot=hdBot(x), w=hdW(x), b=hdBulge(x), h=top-bot, v=hdValley(x);
+  return [[w-.008,bot],[w-.001+b*.6,bot+h*.18],[w+b,bot+h*.42],[w+b*.9+.003,bot+h*.6],
+          [w-.002+b*.4,bot+h*.72],[w-.008,top-.012],[w-.02,top-.002],[w-.04,top+.003],[w*.55,top-v],[0,top-v*1.1+.002]]; }
+/* Loft between stations as an indexed strip over section points j0..j1 (both sides), smooth normals */
+function loftStrip(stations,section,j0,j1,keep){
+  const S=stations.length, pos=[], idx=[], secs=stations.map(section), cols=[];
+  for(let j=j0;j<=j1;j++) cols.push([j,1]); for(let j=j1;j>=j0;j--) cols.push([j,-1]);   // right side up, then left side down
+  const C=cols.length;
+  for(let i=0;i<S;i++) for(const [j,sd] of cols){ const p=secs[i][j]; pos.push(stations[i],p[1],sd*p[0]); }
+  for(let i=0;i<S-1;i++) for(let k=0;k<C-1;k++){ if(keep&&!keep(stations[i],cols[k][0],cols[k+1][0])) continue; const a=i*C+k, b=(i+1)*C+k, c=(i+1)*C+k+1, d=i*C+k+1;
+    if(cols[k][0]===cols[k+1][0]) continue;   // the seam at the center line
+    idx.push(a,d,c, a,c,b); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
+function mergeFlat(list){ // non-indexed merge that keeps each part's normals
+  const P=[], Nn=[]; for(let g of list){ if(g.index) g=g.toNonIndexed(); P.push(...g.attributes.position.array); Nn.push(...g.attributes.normal.array); }
+  const m=new THREE.BufferGeometry(); m.setAttribute('position',new THREE.Float32BufferAttribute(P,3)); m.setAttribute('normal',new THREE.Float32BufferAttribute(Nn,3)); return m; }
+function capGeo(x,section,flip){ const sec=section(x), ring=[]; for(const p of sec) ring.push([x,p[1],p[0]]); for(let j=sec.length-2;j>=0;j--) ring.push([x,sec[j][1],-sec[j][0]]);
+  const t=capFan(ring,flip); const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(t.flat(),3)); g.computeVertexNormals(); return g; }
 function geoFrom(tris){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(tris.flat(2),3)); g.computeVertexNormals(); return g; }
 function capFan(ring,flip){ const c=[0,0,0]; for(const p of ring){ c[0]+=p[0]; c[1]+=p[1]; c[2]+=p[2]; } c.forEach((v,i)=>c[i]=v/ring.length); const t=[];
   for(let j=0;j<ring.length-1;j++) flip?t.push(c,ring[j+1],ring[j]):t.push(c,ring[j],ring[j+1]); return t; }
+/* Greenhouse: raked windshield, roof, long fastback rear glass, painted B and C pillars */
+const GRF=.25;
+function roofY(x){ const yb=hdTop(x)-.004;
+  if(x>=-.07) return lerp(yb,GRF,Math.sin(Math.PI/2*clamp((.075-x)/.145,0,1)));
+  if(x>=-.2) return GRF+.003*Math.sin(Math.PI*(-.07-x)/.13);
+  return lerp(GRF,yb,Math.pow(clamp((-.2-x)/.24,0,1),1.15)); }
+function ghSection(x){ const yb=hdTop(x)-.004, yt=roofY(x), zb=hdW(x)-.03, z1=.125, h=yt-yb;
+  return [[zb,yb],[lerp(zb,z1,.45),yb+h*.45],[z1+.008,yt-Math.min(.012,h*.4)],[z1,yt-.002],[z1*.5,yt+.003],[0,yt+.004]]; }
 let CARGEO_HD=null;
 function carGeometryHD(){
   if(CARGEO_HD) return CARGEO_HD;
   const base=carGeometry();
-  // body: 84 stations from nose to tail
   const st=[]; for(let k=0;k<=84;k++) st.push(.5-k/84);
-  const sec=x=>{ const top=hdTop(x), bot=hdBot(x), w=hdW(x), h=top-bot;
-    return [[w*.955,bot],[w*.995,bot+h*.25],[w*1.005,bot+h*.5],[w*.995,top-Math.min(.03,h*.35)],[w*.96,top-.009],[w*.88,top-.0015],[w*.6,top+.004],[w*.3,top+.006],[0,top+.0065]]; };
-  const L=loft(st,sec), tris=[];
-  for(let i=0;i<L.pos.length;i+=3) tris.push([L.pos[i],L.pos[i+1],L.pos[i+2]]);
-  let body=geoFrom(tris.concat(chunk(capFan(L.full[0],false))).concat(chunk(capFan(L.full[L.full.length-1],true))));
-  body=assignUV(body); body.computeVertexNormals();
-  // greenhouse: glass all round, the flat part of the roof is painted (roof number)
-  const g0=.1, g3=-.43, gst=[]; for(let k=0;k<=36;k++) gst.push(g0+(g3-g0)*k/36);
-  const roofY=x=>x>-.02?lerp(hdTop(x)-.002,CAR.ROOF+.002,Math.sin(Math.PI/2*clamp((g0-x)/(g0+.02),0,1))):x>-.19?CAR.ROOF+.002:lerp(CAR.ROOF+.002,hdTop(x)-.002,Math.pow(clamp((-.19-x)/(-.19-g3),0,1),.85));
-  const gsec=x=>{ const yb=hdTop(x)-.003, yt=roofY(x), zb=hdW(x)*.87, z1=CAR.W/2*.69, h=yt-yb;
-    return [[zb,yb],[lerp(zb,z1,.35),yb+h*.4],[z1+.006,yt-Math.min(.012,h*.4)],[z1*.93,yt],[z1*.5,yt+.004],[0,yt+.005]]; };
-  const G=loft(gst,gsec), glass=[], roof=[];
-  for(let i=0,t=0;i<G.pos.length;i+=6,t+=2){ const s=Math.floor((i/6)/(G.R-1)), j=(i/6)%(G.R-1), jj=j<G.M-1?j:G.R-2-j, x=gst[s];
-    const isRoof=jj>=3&&x<-.03&&x>-.185; const dst=isRoof?roof:glass; dst.push([G.pos[i],G.pos[i+1],G.pos[i+2]],[G.pos[i+3],G.pos[i+4],G.pos[i+5]]); }
-  let roofG=assignUV(geoFrom(roof),'top'); roofG.computeVertexNormals();
-  const glassG=geoFrom(glass);
+  const lower=loftStrip(st,hdSection,0,3), upper=loftStrip(st,hdSection,3,9);
+  let body=mergeFlat([lower,upper,capGeo(.5,hdSection,false),capGeo(-.5,hdSection,true)]);
+  body=assignUV(body);   // keep the smooth normals: no recompute here
+  // greenhouse: side glass (j0-2), roof (j2-5) on the flat part, windshield and rear glass elsewhere; B and C pillars painted
+  const gst=[]; for(let k=0;k<=36;k++) gst.push(.075-(.075+.44)*k/36);
+  const isRoof=(x,ja,jb)=>Math.min(ja,jb)>=2&&x<-.075&&x>-.205;
+  const isPillar=(x,ja,jb)=>Math.max(ja,jb)<=2&&((x<-.055&&x>-.075)||(x<-.17&&x>-.245));
+  const glassG=loftStrip(gst,ghSection,0,5,(x,a,b)=>!isRoof(x,a,b)&&!isPillar(x,a,b));
+  let roofG=mergeFlat([loftStrip(gst,ghSection,0,5,(x,a,b)=>isRoof(x,a,b)||isPillar(x,a,b))]); roofG=assignUV(roofG);
   // inner wheel wells (dark), so the arches read as openings
-  const well=[]; for(const c of [AX,-AX]){ const n=14, zw=CAR.W/2-.006;
-    for(let k=0;k<n;k++){ const a0=Math.PI*k/n, a1=Math.PI*(k+1)/n, p=(a,z)=>[c+Math.cos(a)*HD.ARCH*.97,WR+Math.sin(a)*HD.ARCH*.97,z];
-      well.push([p(a0,-zw),p(a1,-zw),p(a1,zw)],[p(a0,-zw),p(a1,zw),p(a0,zw)]); } }
+  const well=[]; for(const c of [AX,-AX]){ const n=16, zw=.196;
+    for(let k=0;k<n;k++){ const a0=Math.PI*k/n, a1=Math.PI*(k+1)/n, p=(a,z)=>[c+Math.cos(a)*HD.ARCH*.98,WR+Math.sin(a)*HD.ARCH*.98,z];
+      well.push([p(a0,-zw),p(a1,-zw),p(a1,zw)],[p(a0,-zw),p(a1,zw),p(a0,zw)]);
+      for(const z of [-.12,.12]){ const q=a=>[c+Math.cos(a)*HD.ARCH,WR+Math.sin(a)*HD.ARCH*.99,z]; well.push([[c,WR-.02,z],q(a0),q(a1)]); } } }   // inner walls: no see-through
   const wellG=geoFrom(well);
-  // wheels: rounded tire (lathe), five-spoke rim, brake disc
+  // wheels: rounded tire (lathe), multi-spoke rim, brake disc, single center lug
   const tp=[], tw=CAR.TIRE_W/2; for(const [r,y] of [[WR*.72,-tw],[WR*.93,-tw],[WR*.99,-tw*.85],[WR,-tw*.55],[WR,tw*.55],[WR*.99,tw*.85],[WR*.93,tw],[WR*.72,tw]]) tp.push(new THREE.Vector2(r,y));
-  const tire=new THREE.LatheGeometry(tp,LOW_END?14:24); tire.rotateX(Math.PI/2);
-  const rs=new THREE.Shape(); rs.absarc(0,0,WR*.72,0,Math.PI*2,false);
-  for(let k=0;k<10;k++){ const a=k*Math.PI*2/10+Math.PI/10, h=new THREE.Path(), r0=WR*.26, r1=WR*.64, da=.2;
+  const tire=new THREE.LatheGeometry(tp,LOW_END?12:18); tire.rotateX(Math.PI/2);
+  const rs=new THREE.Shape(); rs.absarc(0,0,WR*.74,0,Math.PI*2,false);
+  for(let k=0;k<10;k++){ const a=k*Math.PI*2/10+Math.PI/10, h=new THREE.Path(), r0=WR*.26, r1=WR*.66, da=.2;
     h.moveTo(Math.cos(a-da*.55)*r0,Math.sin(a-da*.55)*r0); h.lineTo(Math.cos(a-da)*r1,Math.sin(a-da)*r1);
     h.absarc(0,0,r1,a-da,a+da,false); h.lineTo(Math.cos(a+da*.55)*r0,Math.sin(a+da*.55)*r0); h.absarc(0,0,r0,a+da*.55,a-da*.55,true); rs.holes.push(h); }
-  const rim=new THREE.ExtrudeGeometry(rs,{depth:.006,bevelEnabled:true,bevelThickness:.003,bevelSize:.002,bevelSegments:1,curveSegments:LOW_END?8:16});
-  const disc=new THREE.CylinderGeometry(WR*.56,WR*.56,.006,18).rotateX(Math.PI/2);
+  const rim=new THREE.ExtrudeGeometry(rs,{depth:.006,bevelEnabled:true,bevelThickness:.003,bevelSize:.002,bevelSegments:1,curveSegments:LOW_END?4:6});
+  const disc=new THREE.CylinderGeometry(WR*.58,WR*.58,.006,18).rotateX(Math.PI/2);
   const cap=new THREE.CylinderGeometry(WR*.1,WR*.13,.014,6).rotateX(Math.PI/2);   // single center lug nut (hex)
-  const side=new THREE.RingGeometry(WR*.73,WR*.985,40,1);
+  const side=new THREE.RingGeometry(WR*.75,WR*.985,28,1);
   const lens=new THREE.SphereGeometry(.5,12,8);
   CARGEO_HD=Object.assign({},base,{body,roofG,glassG,wellG,tire,rim,disc,cap,lens,side,exh:new THREE.CylinderGeometry(.011,.011,.05,10).rotateX(Math.PI/2)});
   return CARGEO_HD;
@@ -2696,29 +2710,33 @@ function buildCarMesh(L,driver){
   const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
   const add=(geo,mat,x,y,z,sx,sy,sz,par)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); if(sx) m.scale.set(sx,sy,sz); m.castShadow=!lowEnd; (par||body).add(m); return m; };
   add(G.body,paint,0,0,0); add(G.roofG,paint,0,0,0); add(G.glassG,H.glass,0,0,0); add(G.wellG,H.well,0,0,0).castShadow=false;
-  add(G.box,M.black,.475,.036,0,.03,.008,CAR.W-.08);                                         // splitter
-  const sp=add(G.box,M.black,-.493,.194,0,.005,.042,CAR.W-.04); sp.rotation.z=.3;              // spoiler blade on the deck lip
-  [-1,1].forEach(s=>add(G.box,M.black,-.484,.19,s*(CAR.W/2-.022),.026,.034,.004));                // spoiler end plates
-  [-1,1].forEach(sd=>add(G.box,M.black,0,.04,sd*(CAR.W/2-.004),.36,.018,.012));                // side skirts
+  add(G.box,M.black,.495,.036,0,.03,.007,.34);                                               // splitter
+  const sp=add(G.box,M.black,-.497,.2,0,.004,.03,.37); sp.rotation.z=.12;                       // rear spoiler on the deck lip
+  [-1,1].forEach(s=>add(G.box,M.black,-.49,.197,s*.186,.026,.034,.004));                        // spoiler end plates
+  add(G.box,M.black,-.47,.043,0,.07,.01,.3);                                                    // diffuser floor
+  for(const z of [-.1,-.035,.035,.1]) add(G.box,M.black,-.475,.05,z,.06,.022,.004);              // diffuser fins
+  [-1,1].forEach(sd=>add(G.box,M.black,0,.041,sd*.2,.36,.016,.01));                             // rocker panels
   const body3=lin(L.base), mirMat=new THREE.MeshStandardMaterial({color:body3,roughness:.3,metalness:.05});
-  [-1,1].forEach(sd=>{ add(G.box,M.black,.07,.181,sd*(CAR.W/2-.02),.006,.008,.016); add(G.box,mirMat,.068,.188,sd*(CAR.W/2-.008),.014,.013,.022); });   // mirrors
-  // light lenses: headlights wrap the nose corners, tail lights at the rear corners
+  [-1,1].forEach(sd=>{ const z=hdW(.06)-.02; add(G.box,M.black,.06,.176,sd*z,.006,.008,.016); add(G.box,mirMat,.058,.184,sd*(z+.012),.016,.012,.024); });   // mirrors
   // side exhausts ahead of the rear wheels, windshield banner, window net (driver side)
-  [-1,1].forEach(sd=>add(G.exh,M.black,-.17,.04,sd*(CAR.W/2+.006)));
+  [-1,1].forEach(sd=>add(G.exh,M.black,-.17,.044,sd*.212));
   if(!wsCache['b'+L.num]) wsCache['b'+L.num]=new THREE.MeshBasicMaterial({map:bannerTex(L),transparent:true});
-  { const p=new THREE.Vector3(.004,.243,0), n=new THREE.Vector3(.6,.8,0); const b=add(G.plane,wsCache['b'+L.num],p.x+n.x*.004,p.y+n.y*.004,0,.23,.032,1); b.lookAt(b.position.clone().add(n)); b.castShadow=false; }
-  { const n=new THREE.Vector3(0,.37,-.93), w=add(G.plane,H.net,-.07,.214,-.161,.15,.055,1); w.lookAt(w.position.clone().add(n)); w.castShadow=false; }
-  const np=add(G.plane,M.nose,.5035,.078,0,CAR.W-.13,.05,1); np.rotation.y=Math.PI/2; np.castShadow=false;
-  if(!tailCache[L.num]) tailCache[L.num]=new THREE.MeshBasicMaterial({map:tailTex(L)});
-  const tp=add(G.plane,tailCache[L.num],-.5025,.098,0,CAR.W-.03,.1,1); tp.rotation.y=-Math.PI/2; tp.castShadow=false;
+  { const n=new THREE.Vector3(.078,.145,0).normalize(), x=-.045, p=new THREE.Vector3(x,roofY(x)-.006,0); const b=add(G.plane,wsCache['b'+L.num],p.x+n.x*.004,p.y+n.y*.004,0,.21,.026,1); b.lookAt(b.position.clone().add(n)); b.castShadow=false; }
+  { const x=-.12, sec=ghSection(x), zz=lerp(sec[0][0],sec[2][0],.45)+.003, yy=lerp(sec[0][1],sec[2][1],.45), n=new THREE.Vector3(0,.4,-.92);
+    const w=add(G.plane,H.net,x,yy,-zz,.085,.04,1); w.lookAt(w.position.clone().add(n)); w.castShadow=false; }
+  // modern front fascia and rear light bar (decals, as on the real cars)
+  if(!noseCache[L.num]) noseCache[L.num]=new THREE.MeshBasicMaterial({map:noseTex2(L),transparent:true});
+  const nh=hdTop(.5)-hdBot(.5); const np=add(G.plane,noseCache[L.num],.5015,hdBot(.5)+nh/2,0,hdW(.5)*2-.01,nh-.004,1); np.rotation.y=Math.PI/2; np.castShadow=false;
+  if(!tailCache[L.num]) tailCache[L.num]=new THREE.MeshBasicMaterial({map:tailTex2(L)});
+  const th=hdTop(-.5)-hdBot(-.5); const tp=add(G.plane,tailCache[L.num],-.5015,hdBot(-.5)+th/2,0,hdW(-.5)*2-.006,th-.004,1); tp.rotation.y=-Math.PI/2; tp.castShadow=false;
   // wheels: front pair can steer
   const rimMat=new THREE.MeshStandardMaterial({color:lin(L.rim!=null?L.rim:0x1a1b1f),roughness:.35,metalness:.6,envMapIntensity:1});
   const wheels=[];
   [[AX,true],[-AX,false]].forEach(([x,front])=>[-1,1].forEach(sd=>{
-    const pivot=new THREE.Group(); pivot.position.set(x,WR,sd*(CAR.W/2-CAR.TIRE_W/2-.006)); g.add(pivot);
+    const pivot=new THREE.Group(); pivot.position.set(x,WR,sd*(.198-CAR.TIRE_W/2)); g.add(pivot);
     const spin=new THREE.Group(); pivot.add(spin);
     const t=new THREE.Mesh(G.tire,H.tire); t.castShadow=!lowEnd; spin.add(t);
-    const r=new THREE.Mesh(G.rim,rimMat); r.position.z=sd*(CAR.TIRE_W/2-.012); if(sd<0) r.rotation.y=Math.PI; spin.add(r);
+    const r=new THREE.Mesh(G.rim,rimMat); r.position.z=sd*(CAR.TIRE_W/2-.01); if(sd<0) r.rotation.y=Math.PI; spin.add(r);
     const d=new THREE.Mesh(G.disc,H.disc); d.position.z=sd*(CAR.TIRE_W/2-.02); spin.add(d);
     const cp=new THREE.Mesh(G.cap,H.lug); cp.position.z=sd*(CAR.TIRE_W/2-.004); spin.add(cp);
     const sw=new THREE.Mesh(G.side,H.side); sw.position.z=sd*(CAR.TIRE_W/2+.0005); if(sd<0) sw.rotation.y=Math.PI; spin.add(sw);
@@ -2760,13 +2778,13 @@ const Portrait=(function(){
       const pm=new THREE.PMREMGenerator(r); scene.environment=pm.fromEquirectangular(t).texture; pm.dispose(); }catch(e){}
     cam=new THREE.OrthographicCamera(-.56,.56,.22,-.22,.1,10); cam.position.set(0,.13,-3); cam.lookAt(0,.13,0);
   }
-  function get(L){
-    if(cache[L.num]) return cache[L.num];
+  function get(L,build){
+    const key=L.num+(build?'c':''); if(cache[key]) return cache[key];
     try{ if(!r) setup();
-      const m=buildCarMesh(L,L.driver); m.scale.setScalar(1); m.rotation.y=0; m.userData.wheels.forEach(w=>{ if(w.front) w.pivot.rotation.y=.12; });
+      const m=(build||buildCarMesh)(L,L.driver); m.scale.setScalar(1); m.rotation.y=0; m.userData.wheels.forEach(w=>{ if(w.front) w.pivot.rotation.y=.12; });
       const sh=new THREE.Mesh(new THREE.PlaneGeometry(1.2,.32),new THREE.MeshBasicMaterial({map:blobTex,transparent:true,depthWrite:false})); sh.rotation.x=-Math.PI/2; sh.position.y=.001;
       scene.add(m,sh); r.render(scene,cam); const url=r.domElement.toDataURL('image/png'); scene.remove(m,sh);
-      cache[L.num]=url; return url; }catch(e){ return ''; }
+      cache[key]=url; return url; }catch(e){ return ''; }
   }
   return {get};
 })();
@@ -2779,8 +2797,31 @@ function sidewallTex(){ return canvasTex(256,256,(c,w)=>{ c.clearRect(0,0,w,w); 
 function bannerTex(L){ return canvasTex(512,72,(c,w,h)=>{ c.clearRect(0,0,w,h); c.fillStyle=hex(L.bannerBg!=null?L.bannerBg:L.a1); c.fillRect(0,0,w,h);
   c.save(); c.translate(w/2,h/2); fitText(c,L.sponsor,w*.82,h*.78,hex(L.bannerFg!=null?L.bannerFg:(L.a1==='#ffffff'?'#111214':'#ffffff'))); c.restore(); }); }
 /* Window net on the driver side */
-function netTex(){ return canvasTex(128,64,(c,w,h)=>{ c.clearRect(0,0,w,h); c.strokeStyle='rgba(8,8,10,.9)'; c.lineWidth=3;
-  c.strokeRect(1.5,1.5,w-3,h-3); c.lineWidth=1.6; for(let x=10;x<w;x+=12){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,h); c.stroke(); } for(let y=10;y<h;y+=12){ c.beginPath(); c.moveTo(0,y); c.lineTo(w,y); c.stroke(); } }); }
+function netTex(){ return canvasTex(128,64,(c,w,h)=>{ c.clearRect(0,0,w,h); c.strokeStyle='rgba(8,8,10,.75)'; c.lineWidth=2;
+  c.strokeRect(1.5,1.5,w-3,h-3); c.lineWidth=1; for(let x=10;x<w;x+=12){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,h); c.stroke(); } for(let y=10;y<h;y+=12){ c.beginPath(); c.moveTo(0,y); c.lineTo(w,y); c.stroke(); } }); }
+
+/* Front fascia: big dark grille and lower intake, angular decal headlights, splitter lip */
+const noseCache={};
+function noseTex2(L){ return canvasTex(512,128,(c,w,h)=>{ c.clearRect(0,0,w,h);
+  const body=hex(L.base);
+  c.fillStyle='#0b0c0e'; c.beginPath(); c.moveTo(w*.2,h*.3); c.lineTo(w*.8,h*.3); c.lineTo(w*.86,h*.86); c.lineTo(w*.14,h*.86); c.closePath(); c.fill();   // grille
+  c.strokeStyle='rgba(120,124,130,.35)'; c.lineWidth=1.5; for(let y=h*.36;y<h*.84;y+=7) for(let x=w*.18+((y/7|0)%2)*5;x<w*.84;x+=10){ c.beginPath(); c.arc(x,y,2.6,0,7); c.stroke(); }   // mesh
+  c.fillStyle=body; c.fillRect(w*.42,h*.3,w*.16,h*.1);   // body-color nose badge area (blank, no maker badge)
+  for(const sd of [-1,1]){ const cx=w/2+sd*w*.36; c.fillStyle='#0b0c0e'; c.beginPath();                                                // headlight housings
+    c.moveTo(cx-sd*w*.13,h*.1); c.lineTo(cx+sd*w*.12,h*.08); c.lineTo(cx+sd*w*.135,h*.34); c.lineTo(cx-sd*w*.1,h*.3); c.closePath(); c.fill();
+    c.fillStyle='#e9eef2'; c.beginPath(); c.moveTo(cx-sd*w*.1,h*.14); c.lineTo(cx+sd*w*.11,h*.12); c.lineTo(cx+sd*w*.115,h*.2); c.lineTo(cx-sd*w*.06,h*.22); c.closePath(); c.fill();   // light strip
+    c.fillStyle='#9aa4ad'; c.fillRect(cx+sd*w*.02-(sd<0?w*.06:0),h*.23,w*.06,h*.05); }
+  c.fillStyle='#050506'; c.fillRect(0,h*.88,w,h*.12);   // splitter lip
+}); }
+/* Rear: thin full-width light bar, sponsor and number on the bumper, dark diffuser */
+function tailTex2(L){ return canvasTex(512,180,(c,w,h)=>{
+  c.fillStyle=hex(L.base); c.fillRect(0,0,w,h);
+  c.fillStyle='#0b0c0e'; c.fillRect(0,h*.06,w,h*.14);
+  c.fillStyle='#d2141f'; c.fillRect(w*.03,h*.1,w*.94,h*.06); c.fillStyle='#ff5a4a'; c.fillRect(w*.03,h*.115,w*.94,h*.02);   // light bar
+  c.save(); c.translate(w*.5,h*.36); fitText(c,L.sponsor,w*.52,h*.18,hex(L.sponsorColor!=null?L.sponsorColor:0xffffff),FD,hex(L.a1)); c.restore();
+  c.save(); c.translate(w*.5,h*.66); const s=h*.32; c.scale(s,s); drawNumber(c,L,1,0); c.restore();
+  c.fillStyle='#0b0c0e'; c.fillRect(0,h*.86,w,h*.14); for(let x=w*.2;x<w*.81;x+=w*.12){ c.fillStyle='#1d1f23'; c.fillRect(x,h*.86,w*.012,h*.14); }   // diffuser
+}); }
 
 /* ================= Display: station label, HUD, toast ================= */
 let FS=false, LAND=false, TAB=false;
@@ -3715,7 +3756,7 @@ if(DEBUG){
       setupRace(o.track||0); return this.summary(); },
     step(sec){ const n=Math.round(sec/DT); for(let i=0;i<n;i++){ sim(DT); if(state==='between') break; } return this.summary(); },
     run(maxSec){ let t=0; while(state!=='between'&&t<maxSec){ this.step(1); t+=1; } return this.summary(); },
-    hold(v){ DL_HOLD=v; }, air(c){ return airVmax(c); }, sound(){ return {ready:Sound.ready, loaded:Sound.loaded}; }, portrait(i){ return Portrait.get(LIVERIES[i]); },
+    hold(v){ DL_HOLD=v; }, air(c){ return airVmax(c); }, sound(){ return {ready:Sound.ready, loaded:Sound.loaded}; }, portrait(i,classic){ return Portrait.get(LIVERIES[i],classic?buildCarMeshClassic:null); },
     input(o){ Object.assign(input,o); },
     cam(m){ View.camMode=m; },
     render(){ this._now=(this._now||performance.now())+1000/60; draw(this._now); updateHud(true); raceHud(1/60); },
