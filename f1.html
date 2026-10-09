@@ -3649,12 +3649,12 @@ function openTracks(){
   const el=$('trackList'); el.innerHTML='';
   TRACKS.forEach((tr,i)=>{
     const rec=bestRecord(tr); const b=document.createElement('button'); b.className='tcard';
-    b.innerHTML=`<canvas width="300" height="160"></canvas><b>${esc(tr.name)}</b><small>${esc(tr.sub)}</small><small>${tr.miles} mi · ${tr.bank}° · ${tr.laps} laps · ${rec?`Record ${fmtT(rec.t)} · ${esc(rec.n)}`:'No record yet'}</small>`;
-    const g=b.querySelector('canvas').getContext('2d'), pts=ovalPoints(tr);
+    b.innerHTML=`<canvas width="300" height="160"></canvas><b>${esc(tr.name)}</b><small>${esc(tr.sub)}</small><small>${tr.miles} mi · ${tr.road?(tr.street?'street circuit':'road course'):tr.bank+'° banking'} · ${tr.laps} laps · ${rec?`Record ${fmtT(rec.t)} · ${esc(rec.n)}`:'No record yet'}</small>`;
+    const g=b.querySelector('canvas').getContext('2d'), pts=trackPoints(tr);   // every layout: ovals, course lists and corner points
     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const [x,y] of pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }
     const s=Math.min(260/(x1-x0),120/(y1-y0)), ox=150-(x0+x1)/2*s, oy=80-(y0+y1)/2*s;
     g.lineJoin=g.lineCap='round'; g.beginPath(); pts.forEach(([x,y],j)=>j?g.lineTo(x*s+ox,y*s+oy):g.moveTo(x*s+ox,y*s+oy)); g.closePath();
-    g.strokeStyle='#302F35'; g.lineWidth=16; g.stroke(); g.strokeStyle='#B9B6AE'; g.lineWidth=6; g.stroke();
+    g.strokeStyle='#302F35'; g.lineWidth=tr.road?10:16; g.stroke(); g.strokeStyle='#B9B6AE'; g.lineWidth=tr.road?3.5:6; g.stroke();
     g.fillStyle='#E4322A'; g.beginPath(); g.arc(pts[0][0]*s+ox,pts[0][1]*s+oy,6,0,7); g.fill();
     b.onclick=()=>{ hide('trackOv'); pickTrack(i); };
     el.appendChild(b);
