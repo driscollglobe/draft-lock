@@ -1103,7 +1103,10 @@ const LAP_LED_BONUS=5000, CLEAN_BONUS=10000;
    RUBBER_W     max. pace cut for AI cars AHEAD of the player (rubber band)
    ASSIST       steer assist on by default at this level
    ===================================================================== */
-const DIFF=[['Easy',.985,.003,.93,.9],['Medium',1.008,.005,.97,.78],['Hard',1.03,.007,.99,.68]];
+// open-wheel: Easy rivals are slower, the car brakes for the corners by itself (BRAKE_ASSIST) and contact hurts less
+const DIFF=F1ON?[['Easy',.95,.003,.92,.95],['Medium',1.0,.005,.97,.8],['Hard',1.03,.007,.99,.68]]
+  :[['Easy',.985,.003,.93,.9],['Medium',1.008,.005,.97,.78],['Hard',1.03,.007,.99,.68]];
+const BRAKE_ASSIST=F1ON?[true,false,false]:[false,false,false];
 const RUBBER_W=[.02,0,0];
 const ASSIST=[true,false,false];
 
@@ -1399,7 +1402,7 @@ function params(c){
   c.P={ vmax:T.topMph*MPH*1.03*(1+.03*u.eng)*s*(1-.22*d), acc:150*(1+.09*u.eng)*s*(1-.25*d), brk:380*(1+.12*u.brk),
         grip:220*(1+.07*u.tyr)*(1-.12*d), aero:.10+.04*u.aero, draft:1+.12*u.aero };
 }
-function damage(c,v){ if(v<=0) return; c.dmg=Math.min(1,c.dmg+v); params(c); }
+function damage(c,v){ if(v<=0) return; if((c.isP||c.human===2)&&BRAKE_ASSIST[diffIdx]) v*=.5; c.dmg=Math.min(1,c.dmg+v); params(c); }
 
 /* ---- Rolling start: two wide behind the pace car, green flag at the line ---- */
 function paceStartDist(){ return clamp(B.L*.12,1500,2600)/SP; }   // in samples before the line
@@ -1569,7 +1572,7 @@ function carCollide(A,Bc){
         if(DEBUG&&closing>20&&window.DL) DL.events.push([+raceTime.toFixed(1),state,flag,front.L.num,rear.L.num,+closing.toFixed(0),+lon.toFixed(1),+lat.toFixed(1),inTurn?1:0,+(front.q-rear.q).toFixed(0)]);
         if(lon<-8&&racing){
           const behind=Math.abs(front.q-rear.q)<13;   // a hit from behind (not a side-swipe)
-          if(behind&&Math.abs(lat)>=5.5&&closing>30&&front.spinT<=0){ spin(front,Math.sign(lat)||1); }
+          if(behind&&Math.abs(lat)>=5.5&&closing>30&&front.spinT<=0&&!((front.isP||front.human===2)&&BRAKE_ASSIST[diffIdx])){ spin(front,Math.sign(lat)||1); }   // Easy (open-wheel): a tap from behind never spins you
           else if((behind&&(closing>55||(inTurn&&closing>22)))||closing>70){ if(front.looseT<=0&&(front.isP||front.human===2)) toast('Loose!','#F5C518'); if(front.looseT<=0) front.looses=(front.looses||0)+1; front.looseT=1.4; }
           else if(!F1ON){ front.bumpT=.6; rear.bumpT=.6; if((front.isP||rear.isP)&&closing>6&&!inTurn) toast('Bump draft','#26D07C'); }
         }
@@ -1754,6 +1757,15 @@ function assist(c,inp,dt){
   inp.steer=steerTo(c,c.holdQ,dt)*(DIFF[diffIdx][4]||.8);   // the assist only does part of the work: in fast turns you still steer
   return inp;
 }
+/* Brake assist (open-wheel Easy): lifts and brakes for the corner ahead; you only steer */
+function brakeAssist(c,inp){
+  if(!BRAKE_ASSIST[diffIdx]||c.surf===1||c.spinT>0||c.vl<60) return inp;
+  const P=c.P, N=B.N, brk=P.brk*.8, look=Math.min(N/3,Math.round((c.vl*c.vl/(2*brk)+60)/SP));
+  let ts=1e9; for(let k=0;k<=look;k+=2){ const kk=Math.abs(B.K[(c.idx+k)%N])+1e-6, g0=P.grip*.9*(1-.16*c.wear), b=g0*P.aero/P.vmax;
+    ts=Math.min(ts,Math.sqrt(((b+Math.sqrt(b*b+4*kk*g0))/(2*kk))**2+2*brk*k*SP)); }
+  if(c.vl>ts+12){ inp.brake=true; inp.gas=false; inp.gasA=null; } else if(c.vl>ts){ inp.gas=false; inp.gasA=null; }
+  return inp;
+}
 function resetPlayer(){
   if(state!=='race'||paused||!player||player.finished) return;
   respawn(player); player.lost=0; player.wrongT=0; toast('Reset','#F5C518');
@@ -1817,10 +1829,10 @@ function sim(dt){
     if(c.pit) inp=pitDrive(c,dt);
     else if(formationNow&&!c.finished) inp=formation(c,dt);
     else if(state==='race'&&raceTime<c.react && !c.isP && c.human!==2) inp={gas:true,brake:false,steer:steerTo(c,c.q,dt)};
-    else if(c.human===2&&!c.auto) inp=assist(c,keyInput2(),dt);
-    else if(c.isP&&!c.auto&&DL_AUTO==='gas') inp=assist(c,{gas:true,brake:false,steer:0},dt);
+    else if(c.human===2&&!c.auto) inp=brakeAssist(c,assist(c,keyInput2(),dt));
+    else if(c.isP&&!c.auto&&DL_AUTO==='gas') inp=brakeAssist(c,assist(c,{gas:true,brake:false,steer:0},dt));
     else if(c.isP&&!c.auto&&DL_AUTO==='draft'){ inp=aiInput(c,dt); }
-    else if(c.isP&&!c.auto&&!DL_AUTO) inp=assist(c,keyInput(),dt);
+    else if(c.isP&&!c.auto&&!DL_AUTO) inp=brakeAssist(c,assist(c,keyInput(),dt));
     else if((c.isP||c.human===2)&&c.auto&&state==='post'){ inp=aiInput(c,dt); inp.gas=inp.gas&&c.vl<250; }
     else inp=aiInput(c,dt);
     stepCar(c,inp,dt);
@@ -1829,6 +1841,10 @@ function sim(dt){
   for(const c of cars){ if(c.boostT>0){ c.boostT-=dt; } progress(c,dt); wallCollide(c); skidMarks(c);
     // a car stopped on the track brings out the caution
     if(state==='race'&&!c.finished&&Math.abs(c.vl)<30*MPH&&raceTime>8){ c.stopT+=dt; if(c.stopT>1.2){ c.stopT=-30; wreck(c); } } else if(c.stopT>0) c.stopT=0;
+    // Easy (open-wheel): stuck or facing the wrong way for a moment, the car is put back on track by itself
+    if((c.isP||c.human===2)&&BRAKE_ASSIST[diffIdx]&&state==='race'&&!c.finished&&!c.pit){
+      c.easyT=(Math.abs(c.vl)<25*MPH||c.wrongT>.6||c.lost>1.5)&&c.spinT<=0?(c.easyT||0)+dt:0;
+      if(c.easyT>2){ c.easyT=0; respawn(c); c.lost=0; c.wrongT=0; if(c.isP) toast('Back on track','#26D07C'); } }
     if(c.dmg>.55){ c.smokeT-=dt; if(c.smokeT<=0){ smoke(c); c.smokeT=.12-c.dmg*.06; } } }
   updateParts(dt);
   if(state==='post'){ postT+=dt; const allIn=cars.every(c=>c.finished);
@@ -3678,7 +3694,7 @@ updHero();
 
 /* Difficulty, steer assist, touch steering */
 let diffIdx=(()=>{ try{ const v=localStorage.getItem(STORE+'difficulty3'); return v!==null&&+v>=0&&+v<DIFF.length?+v:0; }catch(e){ return 0; } })();
-const DIFF_NOTE=['Steer assist on · rivals a touch slower than you',F1ON?'Rivals as fast as you · the tow and DRS decide it':'Rivals as fast as you · the draft decides it','Rivals faster than you · they block · no help'];
+const DIFF_NOTE=F1ON?['Steer and brake assist on · slower rivals','Rivals as fast as you · the tow and DRS decide it','Rivals faster than you · they block · no help']:['Steer assist on · rivals a touch slower than you',F1ON?'Rivals as fast as you · the tow and DRS decide it':'Rivals as fast as you · the draft decides it','Rivals faster than you · they block · no help'];
 function updDiff(){ $('diffSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('sel',+b.dataset.v===diffIdx));
   $('diffNote').textContent=DIFF_NOTE[diffIdx]; updAssist(); updCupMeta(); }
 $('diffSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ diffIdx=+b.dataset.v; try{ localStorage.setItem(STORE+'difficulty3',diffIdx); }catch(e){} updDiff(); });
