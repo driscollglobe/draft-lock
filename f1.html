@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en" data-game="draft-lock" data-series="stock" data-store-prefix="dl_"><head>
+<html lang="en" data-game="apex-gp" data-series="f1" data-store-prefix="ag_"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Draft Lock</title>
+<title>Apex GP</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -557,8 +557,8 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
           <div class="hud-bot">
             <div class="hud-spd"><b id="hSpd">0</b><span>MPH</span></div>
             <div class="hud-meters">
-              <div class="hud-m" id="mDraft"><span>DRAFT</span><i><u></u></i></div>
-              <div class="hud-m sling" id="mSling"><span>SLINGSHOT</span><i><u></u></i><kbd>SPACE</kbd></div>
+              <div class="hud-m" id="mDraft"><span>TOW</span><i><u></u></i></div>
+              <div class="hud-m sling" id="mSling"><span>DRS</span><i><u></u></i><kbd>SPACE</kbd></div>
               <div class="hud-m tires" id="mTires"><span>TIRES</span><i><u></u></i><kbd>Q PIT</kbd></div>
             </div>
           </div>
@@ -586,7 +586,7 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
         <p class="msc-tagline" id="tagline"></p>
         <div class="msc-seg" id="diffSeg" role="group" aria-label="Difficulty"><button type="button" data-v="0">Easy</button><button type="button" data-v="1">Medium</button><button type="button" data-v="2">Hard</button></div>
         <p class="msc-seg-meta" id="diffNote"></p>
-        <button class="msc-play" id="cupBtn">Start cup</button>
+        <button class="msc-play" id="cupBtn">Start season</button>
         <p class="msc-seg-meta" id="cupMeta" style="margin-top:-6px"></p>
         <div class="btnrow">
           <button class="secondary" id="singleBtn">Single race</button>
@@ -614,7 +614,7 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
               <div class="diffnote">Green: full throttle · Yellow: lift · Red: brake</div></div>
             <div><label class="field-label">Steer assist</label>
               <div class="seg" id="assistSeg"><button type="button" class="secondary" data-v="1">On</button><button type="button" class="secondary" data-v="0">Off</button></div>
-              <div class="diffnote">Holds your groove on the ovals</div></div>
+              <div class="diffnote">Holds your line between the turns</div></div>
             <div><label class="field-label">Sound</label>
               <div class="seg" id="soundSeg"><button type="button" class="secondary" data-v="1">On</button><button type="button" class="secondary" data-v="0">Off</button></div></div>
             <div class="touch-only"><label class="field-label">Steering (touch)</label>
@@ -673,9 +673,9 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
       <div id="cupTrophy"></div>
       <p class="lead" id="cupText"></p>
       <table class="res" id="cupTable"></table>
-      <p>My best cups</p>
+      <p>My best seasons</p>
       <ol class="hs" id="cupList"></ol>
-      <button class="cta" id="cupAgain">New cup</button>
+      <button class="cta" id="cupAgain">New season</button>
       <button class="secondary" id="cupMenu">Main menu</button>
       <div id="cupAd"></div>
     </div></div>
@@ -684,7 +684,7 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
       <button type="button" class="pbtn" aria-label="Pause">❚❚</button><button type="button" class="cbtn" aria-label="Camera">CAM</button><button type="button" class="pitbtn" aria-label="Pit this lap">PIT</button>
       <div class="rightCtl"><button type="button" class="rbtn" aria-label="Reset car">R</button>
         <div class="bcue">LIFT</div>
-        <div class="pedals"><button type="button" class="tbtn" aria-label="Slingshot" hidden>⚡<b>0</b></button><div class="pedal brake"><canvas></canvas><small>Brake</small></div><div class="pedal gas"><canvas></canvas><small>Throttle</small></div></div></div></div>
+        <div class="pedals"><button type="button" class="tbtn" aria-label="DRS" hidden>⚡<b>0</b></button><div class="pedal brake"><canvas></canvas><small>Brake</small></div><div class="pedal gas"><canvas></canvas><small>Throttle</small></div></div></div></div>
     <div id="fsbar"><span></span><i class="dmg"></i></div>
     <div id="coach" hidden><span></span><button type="button">Skip</button></div>
     </div>
@@ -700,7 +700,7 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
       <div class="stat"><small>Best lap</small><b id="sBest">–</b></div>
     </div>
     <div class="box cupbox" id="cupBox" hidden>
-      <h3 id="cupBoxTitle">Cup</h3>
+      <h3 id="cupBoxTitle">Season</h3>
       <div class="stats">
         <div class="stat"><small>Winnings</small><b id="sCoins">$0</b></div>
         <div class="stat"><small>Points</small><b id="sPts">0</b></div>
@@ -714,8 +714,7 @@ html[data-series="f1"] #mctl .tbtn b{min-width:38px;font-size:10px}
       <kbd>↑</kbd> / <kbd>W</kbd> Throttle<br>
       <kbd>↓</kbd> / <kbd>S</kbd> Brake<br>
       <kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> Steer<br>
-      <kbd>Space</kbd> Slingshot (fills in the draft)<br>
-      <kbd>Q</kbd> Pit this lap (new tires, repairs)<br>
+      <kbd>Space</kbd> DRS (in a DRS zone, within 1 s of the car ahead)<br>
       <kbd>C</kbd> Camera · <kbd>R</kbd> Reset · <kbd>P</kbd> Pause · <kbd>M</kbd> Sound<br>
       Gamepad: stick steers, triggers drive
     </div>
@@ -886,7 +885,7 @@ const MSC = (function(){
 <script>
 (()=>{
 'use strict';
-const SERIES='stock', STORE='dl_';
+const SERIES='f1', STORE='ag_';
 /* =====================================================================
    OPEN-WHEEL SERIES DATA (used when SERIES==='f1')
    Same row format as the stock car TRACKS (see the comment block in 00_data.js).
